@@ -59,12 +59,12 @@ create table if not exists public.prayers (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references public.profiles(id) on delete cascade not null,
     date date default current_date not null,
-    fajr boolean default false not null,
-    dhuhr boolean default false not null,
-    asr boolean default false not null,
-    maghrib boolean default false not null,
-    isha boolean default false not null,
-    tahajjud boolean default false not null,
+    fajr text default 'No' not null,
+    dhuhr text default 'No' not null,
+    asr text default 'No' not null,
+    maghrib text default 'No' not null,
+    isha text default 'No' not null,
+    tahajjud text default 'No' not null,
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
     constraint prayers_user_date_key unique (user_id, date)
 );

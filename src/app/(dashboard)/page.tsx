@@ -14,8 +14,9 @@ import {
   Calendar,
   Clock
 } from 'lucide-react';
-import { db, Profile, Prayer, Habit, HabitLog, Task, Goal } from '@/lib/supabase/client';
+import { db, Profile, Prayer, Habit, HabitLog, Task, Goal, PrayerStatus } from '@/lib/supabase/client';
 import { getDailyQuote } from '@/lib/utils/quotes';
+import { toLocalDateString, formatLocalLongDate } from '@/lib/utils/date';
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [formattedDate, setFormattedDate] = useState('');
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateString();
 
   const loadDashboardData = async () => {
     try {
@@ -58,12 +59,12 @@ export default function DashboardPage() {
           id: `prayer-${todayStr}`,
           user_id: prof.id,
           date: todayStr,
-          fajr: false,
-          dhuhr: false,
-          asr: false,
-          maghrib: false,
-          isha: false,
-          tahajjud: false,
+          fajr: 'No',
+          dhuhr: 'No',
+          asr: 'No',
+          maghrib: 'No',
+          isha: 'No',
+          tahajjud: 'No',
           updated_at: new Date().toISOString()
         });
       }
@@ -77,10 +78,8 @@ export default function DashboardPage() {
   useEffect(() => {
     setTodayQuote(getDailyQuote());
     loadDashboardData();
-    setFormattedDate(
-      new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    );
-  }, []);
+    setFormattedDate(formatLocalLongDate(todayStr));
+  }, [todayStr]);
 
   // Time-of-day greeting generator
   const getGreeting = () => {
@@ -105,7 +104,7 @@ export default function DashboardPage() {
       todayPrayer.asr,
       todayPrayer.maghrib,
       todayPrayer.isha
-    ].filter(Boolean).length;
+    ].filter(status => status === 'Ada' || status === 'Qada').length;
     return Math.round((checked / 5) * 100);
   };
 
@@ -140,7 +139,8 @@ export default function DashboardPage() {
   // -------------------------------------------------------------
   const togglePrayer = async (name: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'tahajjud') => {
     if (!todayPrayer) return;
-    const nextVal = !todayPrayer[name];
+    const current = todayPrayer[name] || 'No';
+    const nextVal: PrayerStatus = current === 'No' ? 'Ada' : current === 'Ada' ? 'Qada' : 'No';
     
     // Optimistic UI updates
     setTodayPrayer(prev => prev ? { ...prev, [name]: nextVal } : null);
@@ -150,7 +150,7 @@ export default function DashboardPage() {
     } catch (e) {
       console.error(e);
       // Revert if error
-      setTodayPrayer(prev => prev ? { ...prev, [name]: !nextVal } : null);
+      setTodayPrayer(prev => prev ? { ...prev, [name]: current } : null);
     }
   };
 
@@ -338,27 +338,41 @@ export default function DashboardPage() {
               { name: 'isha', label: 'Isha', time: 'Night' },
               { name: 'tahajjud', label: 'Tahajjud', time: 'Tahajjud' },
             ].map((p) => {
-              const isChecked = todayPrayer ? (todayPrayer as any)[p.name] : false;
+              const status = todayPrayer ? ((todayPrayer as any)[p.name] as PrayerStatus) : 'No';
               
               return (
                 <button
                   key={p.name}
                   onClick={() => togglePrayer(p.name as any)}
-                  className={`p-3.5 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 group transition-all duration-200 cursor-pointer ${
-                    isChecked 
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 glow-emerald' 
+                  className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 group transition-all duration-200 cursor-pointer ${
+                    status === 'Ada'
+                      ? 'border-emerald-500/80 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.12)]'
+                      : status === 'Qada'
+                      ? 'border-amber-500/80 bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.12)]'
                       : 'border-border bg-muted/10 hover:bg-muted text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <span className="text-[10px] font-bold tracking-wider uppercase">{p.label}</span>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all ${
-                    isChecked 
-                      ? 'bg-emerald-500 border-emerald-500 text-white scale-110 shadow-sm' 
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all ${
+                    status === 'Ada'
+                      ? 'bg-emerald-500 border-emerald-500 text-white scale-105 shadow-sm'
+                      : status === 'Qada'
+                      ? 'bg-amber-500 border-amber-500 text-white scale-105 shadow-sm'
                       : 'border-border bg-background text-transparent group-hover:border-muted-foreground/60'
                   }`}>
-                    <Check size={14} className="stroke-[3.5]" />
+                    {status === 'Ada' && <Check size={14} className="stroke-[3.5]" />}
+                    {status === 'Qada' && <Clock size={14} className="stroke-[3.5]" />}
+                    {status === 'No' && <span className="w-1.5 h-1.5 rounded-full bg-border group-hover:bg-muted-foreground/40" />}
                   </div>
-                  <span className="text-[9px] text-muted-foreground/50 leading-none">{p.time}</span>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md leading-none ${
+                    status === 'Ada'
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      : status === 'Qada'
+                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                      : 'text-muted-foreground/50'
+                  }`}>
+                    {status === 'Ada' ? 'Ada' : status === 'Qada' ? 'Qada' : p.time}
+                  </span>
                 </button>
               );
             })}

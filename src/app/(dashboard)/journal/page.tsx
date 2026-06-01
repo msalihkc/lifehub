@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { db, JournalEntry } from '@/lib/supabase/client';
+import { toLocalDateString } from '@/lib/utils/date';
 
 export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -38,7 +39,7 @@ export default function JournalPage() {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateString();
 
   useEffect(() => {
     loadJournalData();

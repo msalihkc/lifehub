@@ -14,6 +14,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { db, Profile } from '@/lib/supabase/client';
+import { toLocalDateString } from '@/lib/utils/date';
 import { useTheme } from '@/components/ThemeProvider';
 
 export default function ProfilePage() {
@@ -84,7 +85,7 @@ export default function ProfilePage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `lifehub_backup_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `lifehub_backup_${toLocalDateString()}.json`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {

@@ -23,6 +23,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { db, Prayer, Habit, HabitLog, Task, Goal } from '@/lib/supabase/client';
+import { toLocalDateString, getPastLocalDateString } from '@/lib/utils/date';
 
 export default function AnalyticsPage() {
   const [prayers, setPrayers] = useState<Prayer[]>([]);
@@ -36,9 +37,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const fetchAnalyticsData = async () => {
       try {
-        const start = new Date();
-        start.setDate(start.getDate() - 30);
-        const startStr = start.toISOString().split('T')[0];
+        const startStr = getPastLocalDateString(30);
 
         const [prs, hbs, logs, tks, gls] = await Promise.all([
           db.getPrayers(startStr),
@@ -73,25 +72,26 @@ export default function AnalyticsPage() {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
     for (let i = 6; i >= 0; i--) {
+      const dateStr = getPastLocalDateString(i);
+      const log = prayers.find(p => p.date === dateStr);
+      
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const log = prayers.find(p => p.date === dateStr);
       
       let count = 0;
       if (log) {
-        if (log.fajr) count++;
-        if (log.dhuhr) count++;
-        if (log.asr) count++;
-        if (log.maghrib) count++;
-        if (log.isha) count++;
+        if (log.fajr === 'Ada' || log.fajr === 'Qada') count++;
+        if (log.dhuhr === 'Ada' || log.dhuhr === 'Qada') count++;
+        if (log.asr === 'Ada' || log.asr === 'Qada') count++;
+        if (log.maghrib === 'Ada' || log.maghrib === 'Qada') count++;
+        if (log.isha === 'Ada' || log.isha === 'Qada') count++;
       }
       
       data.push({
         day: days[d.getDay()],
         date: dateStr,
         obligatory: count,
-        tahajjud: log?.tahajjud ? 1 : 0
+        tahajjud: (log?.tahajjud === 'Ada' || log?.tahajjud === 'Qada') ? 1 : 0
       });
     }
     return data;

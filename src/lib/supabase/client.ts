@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { toLocalDateString, getPastLocalDateString } from '../utils/date';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
@@ -28,17 +29,38 @@ export interface Profile {
   updated_at: string;
 }
 
+export type PrayerStatus = 'Ada' | 'Qada' | 'No';
+
 export interface Prayer {
   id: string;
   user_id: string;
   date: string; // YYYY-MM-DD
-  fajr: boolean;
-  dhuhr: boolean;
-  asr: boolean;
-  maghrib: boolean;
-  isha: boolean;
-  tahajjud: boolean;
+  fajr: PrayerStatus;
+  dhuhr: PrayerStatus;
+  asr: PrayerStatus;
+  maghrib: PrayerStatus;
+  isha: PrayerStatus;
+  tahajjud: PrayerStatus;
   updated_at: string;
+}
+
+export function normalizePrayer(p: any): Prayer {
+  if (!p) return p;
+  const normalizeStatus = (val: any): PrayerStatus => {
+    if (val === true || val === 'true') return 'Ada';
+    if (val === false || val === 'false' || !val) return 'No';
+    if (val === 'Ada' || val === 'Qada' || val === 'No') return val;
+    return 'No'; // default fallback
+  };
+  return {
+    ...p,
+    fajr: normalizeStatus(p.fajr),
+    dhuhr: normalizeStatus(p.dhuhr),
+    asr: normalizeStatus(p.asr),
+    maghrib: normalizeStatus(p.maghrib),
+    isha: normalizeStatus(p.isha),
+    tahajjud: normalizeStatus(p.tahajjud)
+  };
 }
 
 export interface Habit {
@@ -122,11 +144,9 @@ export interface Notification {
 const MOCK_USER_ID = 'local-user-uuid-1234-5678';
 
 const getInitialSeedData = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const getPastDate = (daysAgo: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() - daysAgo);
-    return d.toISOString().split('T')[0];
+    return getPastLocalDateString(daysAgo);
   };
 
   const mockProfile: Profile = {
@@ -148,17 +168,16 @@ const getInitialSeedData = () => {
   // Seed Prayers for past 10 days
   const mockPrayers: Prayer[] = Array.from({ length: 11 }).map((_, index) => {
     const dateStr = getPastDate(index);
-    const isToday = index === 0;
     return {
       id: `prayer-${dateStr}`,
       user_id: MOCK_USER_ID,
       date: dateStr,
-      fajr: true,
-      dhuhr: index % 4 !== 0,
-      asr: index % 6 !== 0,
-      maghrib: true,
-      isha: true,
-      tahajjud: index % 3 === 0,
+      fajr: 'Ada',
+      dhuhr: index % 4 !== 0 ? 'Ada' : 'No',
+      asr: index % 6 !== 0 ? (index % 3 === 0 ? 'Qada' : 'Ada') : 'No',
+      maghrib: 'Ada',
+      isha: 'Ada',
+      tahajjud: index % 3 === 0 ? 'Ada' : 'No',
       updated_at: new Date().toISOString()
     };
   });
@@ -527,12 +546,12 @@ export const db = {
       if (endDateStr) query = query.lte('date', endDateStr);
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return (data || []).map(normalizePrayer);
     } else {
       let items = getLocal<Prayer>('lifehub_prayers');
       if (startDateStr) items = items.filter(x => x.date >= startDateStr);
       if (endDateStr) items = items.filter(x => x.date <= endDateStr);
-      return items.sort((a, b) => b.date.localeCompare(a.date));
+      return items.map(normalizePrayer).sort((a, b) => b.date.localeCompare(a.date));
     }
   },
 
@@ -564,12 +583,12 @@ export const db = {
           .insert({
             user_id: user.id,
             date: dateStr,
-            fajr: updates.fajr || false,
-            dhuhr: updates.dhuhr || false,
-            asr: updates.asr || false,
-            maghrib: updates.maghrib || false,
-            isha: updates.isha || false,
-            tahajjud: updates.tahajjud || false,
+            fajr: updates.fajr || 'No',
+            dhuhr: updates.dhuhr || 'No',
+            asr: updates.asr || 'No',
+            maghrib: updates.maghrib || 'No',
+            isha: updates.isha || 'No',
+            tahajjud: updates.tahajjud || 'No',
             updated_at: new Date().toISOString()
           })
           .select()
@@ -577,7 +596,7 @@ export const db = {
         if (error) throw error;
         result = data;
       }
-      return result;
+      return normalizePrayer(result);
     } else {
       const prayers = getLocal<Prayer>('lifehub_prayers');
       const idx = prayers.findIndex(x => x.date === dateStr);
@@ -590,18 +609,18 @@ export const db = {
           id: `prayer-${dateStr}`,
           user_id: MOCK_USER_ID,
           date: dateStr,
-          fajr: updates.fajr || false,
-          dhuhr: updates.dhuhr || false,
-          asr: updates.asr || false,
-          maghrib: updates.maghrib || false,
-          isha: updates.isha || false,
-          tahajjud: updates.tahajjud || false,
+          fajr: updates.fajr || 'No',
+          dhuhr: updates.dhuhr || 'No',
+          asr: updates.asr || 'No',
+          maghrib: updates.maghrib || 'No',
+          isha: updates.isha || 'No',
+          tahajjud: updates.tahajjud || 'No',
           updated_at: new Date().toISOString()
         };
         prayers.push(updated);
       }
       setLocal('lifehub_prayers', prayers);
-      return updated;
+      return normalizePrayer(updated);
     }
   },
 

@@ -9,9 +9,11 @@ import {
   ChevronLeft, 
   ChevronRight, 
   RotateCcw,
-  Check
+  Check,
+  Clock
 } from 'lucide-react';
-import { db, Prayer } from '@/lib/supabase/client';
+import { db, Prayer, PrayerStatus } from '@/lib/supabase/client';
+import { toLocalDateString, getPastLocalDateString, parseLocalDate } from '@/lib/utils/date';
 
 export default function PrayersPage() {
   const [prayersHistory, setPrayersHistory] = useState<Prayer[]>([]);
@@ -21,7 +23,7 @@ export default function PrayersPage() {
   
   const [loading, setLoading] = useState(true);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateString();
 
   useEffect(() => {
     setSelectedDate(todayStr);
@@ -40,12 +42,12 @@ export default function PrayersPage() {
         id: `prayer-${selectedDate}`,
         user_id: prayersHistory[0]?.user_id || 'local-user',
         date: selectedDate,
-        fajr: false,
-        dhuhr: false,
-        asr: false,
-        maghrib: false,
-        isha: false,
-        tahajjud: false,
+        fajr: 'No',
+        dhuhr: 'No',
+        asr: 'No',
+        maghrib: 'No',
+        isha: 'No',
+        tahajjud: 'No',
         updated_at: new Date().toISOString()
       });
     }
@@ -54,9 +56,7 @@ export default function PrayersPage() {
   const loadPrayersData = async () => {
     try {
       // Load prayers history for past 60 days to compute stats and calendar logs
-      const start = new Date();
-      start.setDate(start.getDate() - 60);
-      const startStr = start.toISOString().split('T')[0];
+      const startStr = getPastLocalDateString(60);
       
       const data = await db.getPrayers(startStr);
       setPrayersHistory(data);
@@ -67,14 +67,15 @@ export default function PrayersPage() {
     }
   };
 
-  // Toggle specific prayer completion
-  const handleToggle = async (prayerName: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'tahajjud') => {
+  // Change specific prayer status
+  const handleStatusChange = async (
+    prayerName: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'tahajjud',
+    newStatus: PrayerStatus
+  ) => {
     if (!activePrayer) return;
-
-    const nextVal = !(activePrayer as any)[prayerName];
     
     // Optimistic UI updates
-    const updatedRecord = { ...activePrayer, [prayerName]: nextVal, updated_at: new Date().toISOString() };
+    const updatedRecord = { ...activePrayer, [prayerName]: newStatus, updated_at: new Date().toISOString() };
     setActivePrayer(updatedRecord);
     setPrayersHistory(prev => {
       const filtered = prev.filter(p => p.date !== selectedDate);
@@ -82,7 +83,7 @@ export default function PrayersPage() {
     });
 
     try {
-      await db.savePrayer(selectedDate, { [prayerName]: nextVal });
+      await db.savePrayer(selectedDate, { [prayerName]: newStatus });
       // Refresh backend state
       loadPrayersData();
     } catch (err) {
@@ -97,12 +98,12 @@ export default function PrayersPage() {
     
     const clearedRecord = {
       ...activePrayer,
-      fajr: false,
-      dhuhr: false,
-      asr: false,
-      maghrib: false,
-      isha: false,
-      tahajjud: false,
+      fajr: 'No' as PrayerStatus,
+      dhuhr: 'No' as PrayerStatus,
+      asr: 'No' as PrayerStatus,
+      maghrib: 'No' as PrayerStatus,
+      isha: 'No' as PrayerStatus,
+      tahajjud: 'No' as PrayerStatus,
       updated_at: new Date().toISOString()
     };
     
@@ -114,12 +115,12 @@ export default function PrayersPage() {
 
     try {
       await db.savePrayer(selectedDate, {
-        fajr: false,
-        dhuhr: false,
-        asr: false,
-        maghrib: false,
-        isha: false,
-        tahajjud: false
+        fajr: 'No',
+        dhuhr: 'No',
+        asr: 'No',
+        maghrib: 'No',
+        isha: 'No',
+        tahajjud: 'No'
       });
       loadPrayersData();
     } catch (err) {
@@ -135,20 +136,18 @@ export default function PrayersPage() {
   // Weekly obligatory prayers (last 7 days - 35 obligatory possible)
   const getWeeklyStats = () => {
     const last7Days = Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0];
+      return getPastLocalDateString(i);
     });
 
     let completed = 0;
     last7Days.forEach(dateStr => {
       const log = prayersHistory.find(p => p.date === dateStr);
       if (log) {
-        if (log.fajr) completed++;
-        if (log.dhuhr) completed++;
-        if (log.asr) completed++;
-        if (log.maghrib) completed++;
-        if (log.isha) completed++;
+        if (log.fajr === 'Ada' || log.fajr === 'Qada') completed++;
+        if (log.dhuhr === 'Ada' || log.dhuhr === 'Qada') completed++;
+        if (log.asr === 'Ada' || log.asr === 'Qada') completed++;
+        if (log.maghrib === 'Ada' || log.maghrib === 'Qada') completed++;
+        if (log.isha === 'Ada' || log.isha === 'Qada') completed++;
       }
     });
 
@@ -164,7 +163,7 @@ export default function PrayersPage() {
     const month = currentMonth.getMonth();
     
     const thisMonthLogs = prayersHistory.filter(p => {
-      const logDate = new Date(p.date);
+      const logDate = parseLocalDate(p.date);
       return logDate.getFullYear() === year && logDate.getMonth() === month;
     });
 
@@ -172,12 +171,12 @@ export default function PrayersPage() {
     let tahajjudCompleted = 0;
     
     thisMonthLogs.forEach(log => {
-      if (log.fajr) obligatoryCompleted++;
-      if (log.dhuhr) obligatoryCompleted++;
-      if (log.asr) obligatoryCompleted++;
-      if (log.maghrib) obligatoryCompleted++;
-      if (log.isha) obligatoryCompleted++;
-      if (log.tahajjud) tahajjudCompleted++;
+      if (log.fajr === 'Ada' || log.fajr === 'Qada') obligatoryCompleted++;
+      if (log.dhuhr === 'Ada' || log.dhuhr === 'Qada') obligatoryCompleted++;
+      if (log.asr === 'Ada' || log.asr === 'Qada') obligatoryCompleted++;
+      if (log.maghrib === 'Ada' || log.maghrib === 'Qada') obligatoryCompleted++;
+      if (log.isha === 'Ada' || log.isha === 'Qada') obligatoryCompleted++;
+      if (log.tahajjud === 'Ada' || log.tahajjud === 'Qada') tahajjudCompleted++;
     });
 
     const totalObligatoryPossible = thisMonthLogs.length * 5;
@@ -195,14 +194,20 @@ export default function PrayersPage() {
     let checkDate = new Date(); // Start checking from today backwards
     
     while (true) {
-      const dateStr = checkDate.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(checkDate);
       const log = prayersHistory.find(p => p.date === dateStr);
       
       // If we find today incomplete, we check yesterday first before breaking (as today is still in progress)
       const isToday = dateStr === todayStr;
       
       if (log) {
-        const allCompleted = log.fajr && log.dhuhr && log.asr && log.maghrib && log.isha;
+        const fajrDone = log.fajr === 'Ada' || log.fajr === 'Qada';
+        const dhuhrDone = log.dhuhr === 'Ada' || log.dhuhr === 'Qada';
+        const asrDone = log.asr === 'Ada' || log.asr === 'Qada';
+        const maghribDone = log.maghrib === 'Ada' || log.maghrib === 'Qada';
+        const ishaDone = log.isha === 'Ada' || log.isha === 'Qada';
+        
+        const allCompleted = fajrDone && dhuhrDone && asrDone && maghribDone && ishaDone;
         if (allCompleted) {
           streak++;
         } else {
@@ -234,7 +239,7 @@ export default function PrayersPage() {
   const calendarCells = Array.from({ length: 42 }).map((_, idx) => {
     const dateNum = idx - startDay + 1;
     const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dateNum);
-    const dateStr = cellDate.toISOString().split('T')[0];
+    const dateStr = toLocalDateString(cellDate);
     
     const isValid = dateNum > 0 && dateNum <= days;
     const isSelected = dateStr === selectedDate;
@@ -373,12 +378,12 @@ export default function PrayersPage() {
               let obligChecked = 0;
               let isTahajjud = false;
               if (cell.prayerLog) {
-                if (cell.prayerLog.fajr) obligChecked++;
-                if (cell.prayerLog.dhuhr) obligChecked++;
-                if (cell.prayerLog.asr) obligChecked++;
-                if (cell.prayerLog.maghrib) obligChecked++;
-                if (cell.prayerLog.isha) obligChecked++;
-                if (cell.prayerLog.tahajjud) isTahajjud = true;
+                if (cell.prayerLog.fajr === 'Ada' || cell.prayerLog.fajr === 'Qada') obligChecked++;
+                if (cell.prayerLog.dhuhr === 'Ada' || cell.prayerLog.dhuhr === 'Qada') obligChecked++;
+                if (cell.prayerLog.asr === 'Ada' || cell.prayerLog.asr === 'Qada') obligChecked++;
+                if (cell.prayerLog.maghrib === 'Ada' || cell.prayerLog.maghrib === 'Qada') obligChecked++;
+                if (cell.prayerLog.isha === 'Ada' || cell.prayerLog.isha === 'Qada') obligChecked++;
+                if (cell.prayerLog.tahajjud === 'Ada' || cell.prayerLog.tahajjud === 'Qada') isTahajjud = true;
               }
 
               return (
@@ -442,46 +447,51 @@ export default function PrayersPage() {
             </span>
           </div>
 
-          {/* Individual prayer toggle buttons */}
+          {/* Individual prayer toggle segmented buttons */}
           <div className="space-y-3">
             {[
               { name: 'fajr', label: 'Fajr', subtitle: 'Dawn prayer (2 Sunnah + 2 Fard)' },
-              { name: 'dhuhr', label: 'Dhuhr', subtitle: 'Noon prayer (4 Sunnah + 4 Fard + 2 Sunnah)' },
+              { name: 'dhuhr', label: 'Dhuhr', subtitle: 'Noon (4 Sunnah + 4 Fard + 2 Sun)' },
               { name: 'asr', label: 'Asr', subtitle: 'Afternoon prayer (4 Fard)' },
-              { name: 'maghrib', label: 'Maghrib', subtitle: 'Sunset prayer (3 Fard + 2 Sunnah)' },
-              { name: 'isha', label: 'Isha', subtitle: 'Night prayer (4 Fard + 2 Sunnah + 3 Witr)' },
+              { name: 'maghrib', label: 'Maghrib', subtitle: 'Sunset (3 Fard + 2 Sunnah)' },
+              { name: 'isha', label: 'Isha', subtitle: 'Night (4 Fard + 2 Sun + 3 Witr)' },
               { name: 'tahajjud', label: 'Tahajjud (Bonus)', subtitle: 'Night vigil prayer (2 to 8 Rakaah)' }
             ].map((p) => {
-              const isChecked = activePrayer ? (activePrayer as any)[p.name] : false;
-              const isTahaj = p.name === 'tahajjud';
+              const status = activePrayer ? ((activePrayer as any)[p.name] as PrayerStatus) : 'No';
 
               return (
-                <button
+                <div
                   key={p.name}
-                  onClick={() => handleToggle(p.name as any)}
-                  className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer group ${
-                    isChecked
-                      ? isTahaj 
-                        ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 glow-amber'
-                        : 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 glow-emerald'
-                      : 'border-border bg-muted/10 hover:bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-2xl border border-border bg-muted/5 gap-3"
                 >
-                  <div className="pr-2">
+                  <div className="pr-1">
                     <p className="text-xs font-bold leading-none">{p.label}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">{p.subtitle}</p>
+                    <p className="text-[9px] text-muted-foreground/60 mt-1">{p.subtitle}</p>
                   </div>
 
-                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-all ${
-                    isChecked
-                      ? isTahaj 
-                        ? 'bg-amber-500 border-amber-500 text-white scale-105 shadow-sm'
-                        : 'bg-emerald-500 border-emerald-500 text-white scale-105 shadow-sm'
-                      : 'border-border bg-background text-transparent group-hover:border-muted-foreground/50'
-                  }`}>
-                    <Check size={14} className="stroke-[3.5]" />
+                  <div className="flex bg-muted p-0.5 rounded-xl border border-border/60 self-start sm:self-center shrink-0">
+                    {[
+                      { val: 'Ada', label: 'Ada', colorClass: 'bg-emerald-500 text-white shadow-sm font-bold border-emerald-500' },
+                      { val: 'Qada', label: 'Qada', colorClass: 'bg-amber-500 text-white shadow-sm font-bold border-amber-500' },
+                      { val: 'No', label: 'No', colorClass: 'bg-zinc-500/20 text-foreground shadow-sm dark:bg-zinc-700/50' }
+                    ].map((opt) => {
+                      const isSelected = status === opt.val;
+                      return (
+                        <button
+                          key={opt.val}
+                          onClick={() => handleStatusChange(p.name as any, opt.val as PrayerStatus)}
+                          className={`px-3 py-1 rounded-lg text-[10px] transition-all cursor-pointer ${
+                            isSelected 
+                              ? opt.colorClass 
+                              : 'text-muted-foreground/80 hover:text-foreground hover:bg-muted-foreground/5'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

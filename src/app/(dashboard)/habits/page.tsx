@@ -13,6 +13,7 @@ import {
   Edit2
 } from 'lucide-react';
 import { db, Habit, HabitLog } from '@/lib/supabase/client';
+import { toLocalDateString, getPastLocalDateString } from '@/lib/utils/date';
 
 export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -30,7 +31,7 @@ export default function HabitsPage() {
   const [color, setColor] = useState('#10b981'); // default Emerald
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateString();
 
   useEffect(() => {
     loadHabitsData();
@@ -43,7 +44,7 @@ export default function HabitsPage() {
         db.getHabits(),
         // Load past 365 days of logs for the GitHub heatmap!
         db.getHabitLogs(
-          new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          getPastLocalDateString(365)
         )
       ]);
       setHabits(hbs);
@@ -160,7 +161,7 @@ export default function HabitsPage() {
     const logsForHabit = habitLogs.filter(l => l.habit_id === habitId && l.completed);
 
     while (true) {
-      const dateStr = checkDate.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(checkDate);
       const hasLog = logsForHabit.some(l => l.date === dateStr);
       
       const isToday = dateStr === todayStr;
@@ -193,7 +194,7 @@ export default function HabitsPage() {
     let curDate = new Date(startDate.getTime());
 
     for (let i = 0; i < totalDays; i++) {
-      const dateStr = curDate.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(curDate);
       
       // Calculate habit completions for this date
       const completionsCount = habitLogs.filter(l => l.date === dateStr && l.completed).length;

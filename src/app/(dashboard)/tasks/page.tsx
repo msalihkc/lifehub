@@ -16,6 +16,7 @@ import {
   List
 } from 'lucide-react';
 import { db, Task } from '@/lib/supabase/client';
+import { toLocalDateString } from '@/lib/utils/date';
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -42,7 +43,7 @@ export default function TasksPage() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringPattern, setRecurringPattern] = useState<Task['recurring_pattern']>(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateString();
 
   useEffect(() => {
     loadTasksData();
