@@ -14,7 +14,7 @@ import {
   Calendar,
   Clock
 } from 'lucide-react';
-import { db, Profile, Prayer, Habit, HabitLog, Task, Goal, PrayerStatus } from '@/lib/supabase/client';
+import { db, Profile, Prayer, Habit, HabitLog, Task, Goal, PrayerStatus, GoalMilestone } from '@/lib/supabase/client';
 import { getDailyQuote } from '@/lib/utils/quotes';
 import { toLocalDateString, formatLocalLongDate } from '@/lib/utils/date';
 
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [todayHabitLogs, setTodayHabitLogs] = useState<HabitLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [milestonesMap, setMilestonesMap] = useState<Record<string, GoalMilestone[]>>({});
   
   const [loading, setLoading] = useState(true);
   const [formattedDate, setFormattedDate] = useState('');
@@ -50,6 +51,16 @@ export default function DashboardPage() {
       setTodayHabitLogs(logs);
       setTasks(tks);
       setGoals(gls);
+
+      // Fetch milestones for loaded goals to accurately compute dashboard progress
+      const msp: Record<string, GoalMilestone[]> = {};
+      await Promise.all(
+        gls.map(async (g) => {
+          const ms = await db.getGoalMilestones(g.id);
+          msp[g.id] = ms;
+        })
+      );
+      setMilestonesMap(msp);
 
       if (prs && prs.length > 0) {
         setTodayPrayer(prs[0]);
@@ -122,11 +133,22 @@ export default function DashboardPage() {
 
   // 3. Task rate: Percentage of today's tasks completed
   const getTaskProgress = () => {
-    const todayTasks = tasks.filter(t => t.due_date === todayStr);
+    const todayTasks = tasks.filter(t => t.due_date && t.due_date.startsWith(todayStr));
     if (todayTasks.length === 0) return 100; // 100% completed if none due
     
     const completedCount = todayTasks.filter(t => t.status === 'Done').length;
     return Math.round((completedCount / todayTasks.length) * 100);
+  };
+
+  // 4. Goal progress: Milestone completion rate calculation
+  const getGoalProgress = (goalId: string) => {
+    const msList = milestonesMap[goalId] || [];
+    if (msList.length === 0) {
+      const goal = goals.find(g => g.id === goalId);
+      return goal?.status === 'Completed' ? 100 : 0;
+    }
+    const doneCount = msList.filter(m => m.is_completed).length;
+    return Math.round((doneCount / msList.length) * 100);
   };
 
   const pRate = getPrayerProgress();
@@ -203,7 +225,7 @@ export default function DashboardPage() {
     );
   }
 
-  const todayTasks = tasks.filter(t => t.due_date === todayStr && t.status !== 'Done');
+  const todayTasks = tasks.filter(t => t.due_date && t.due_date.startsWith(todayStr) && t.status !== 'Done');
   const activeDailyHabits = habits.filter(h => h.frequency === 'daily' && !h.is_archived);
 
   return (
@@ -554,12 +576,12 @@ export default function DashboardPage() {
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[9px] font-semibold text-muted-foreground">
                         <span>Milestone completion</span>
-                        <span>{goal.status === 'Completed' ? '100%' : '50%'}</span>
+                        <span>{getGoalProgress(goal.id)}%</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-muted border border-border/80 overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${catColor}`}
-                          style={{ width: goal.status === 'Completed' ? '100%' : '50%' }}
+                          style={{ width: `${getGoalProgress(goal.id)}%` }}
                         />
                       </div>
                     </div>
