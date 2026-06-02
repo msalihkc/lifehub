@@ -163,13 +163,12 @@ export default function LoginPage() {
               <span>Remember Me</span>
             </label>
             
-            <button
-              type="button"
-              onClick={() => alert('Offline Mode password recovery: Use any email and password to log in instantly!')}
+            <Link
+              href="/forgot-password"
               className="font-semibold text-primary hover:underline"
             >
               Forgot Password?
-            </button>
+            </Link>
           </div>
 
           {/* Action Button */}

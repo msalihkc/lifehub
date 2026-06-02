@@ -11,9 +11,10 @@ import {
   Sparkles, 
   CheckCircle, 
   AlertCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock
 } from 'lucide-react';
-import { db, Profile } from '@/lib/supabase/client';
+import { db, Profile, isCloudMode, supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/lib/utils/date';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -31,6 +32,46 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' }); // 'success' or 'error'
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState({ text: '', type: '' });
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || !confirmPassword) {
+      setSecurityMessage({ text: 'Please fill in all password fields.', type: 'error' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSecurityMessage({ text: 'Passwords do not match.', type: 'error' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setSecurityMessage({ text: 'Password must be at least 6 characters long.', type: 'error' });
+      return;
+    }
+
+    setUpdatingPassword(true);
+    setSecurityMessage({ text: '', type: '' });
+
+    try {
+      if (isCloudMode && supabase) {
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+        if (error) throw error;
+        setSecurityMessage({ text: 'Password updated successfully!', type: 'success' });
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err: any) {
+      setSecurityMessage({ text: err.message || 'Failed to update password.', type: 'error' });
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -288,6 +329,68 @@ export default function ProfilePage() {
               </button>
             </div>
           </form>
+
+          {/* Change Password settings form (Online Mode Only) */}
+          {isCloudMode && (
+            <form onSubmit={handlePasswordChange} className="p-6 rounded-2xl glass-panel bg-card border border-border space-y-5">
+              <h3 className="font-bold text-sm text-foreground flex items-center gap-2 pb-2 border-b border-border">
+                <Lock size={16} className="text-red-500" />
+                <span>Security Settings</span>
+              </h3>
+
+              {securityMessage.text && (
+                <div className={`p-3 rounded-xl border text-xs flex gap-2.5 items-center ${
+                  securityMessage.type === 'success' 
+                    ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500' 
+                    : 'border-red-500/20 bg-red-500/5 text-red-500'
+                }`}>
+                  {securityMessage.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                  <span>{securityMessage.text}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 pl-0.5">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2 rounded-xl border border-border bg-muted/10 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 pl-0.5">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2 rounded-xl border border-border bg-muted/10 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={updatingPassword}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white font-bold text-xs rounded-xl shadow-md hover:bg-red-600 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Save size={14} />
+                  <span>{updatingPassword ? 'Updating...' : 'Update Password'}</span>
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Right Side: Backups, Imports, & Exports */}
