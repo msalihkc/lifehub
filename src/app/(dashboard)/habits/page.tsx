@@ -19,6 +19,14 @@ export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+    }
+  }, [loading, habitLogs]);
 
   // Dialog states
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -274,12 +282,12 @@ export default function HabitsPage() {
           <span>Consistency Heatmap (Past Year)</span>
         </h3>
 
-        <div className="overflow-x-auto pb-2 flex justify-start items-center">
-          <div className="flex gap-1 min-w-[760px]">
-            {weeksGrid.map((week, wIdx) => (
-              <div key={wIdx} className="flex flex-col gap-1">
+        <div ref={scrollContainerRef} className="overflow-x-auto pb-2 flex justify-start items-center w-full">
+          {/* Mobile view: last 15 weeks (fits standard mobile screens nicely without scroll) */}
+          <div className="flex md:hidden gap-1 mx-auto">
+            {weeksGrid.slice(-15).map((week, wIdx) => (
+              <div key={`mobile-wk-${wIdx}`} className="flex flex-col gap-1">
                 {week.map((day) => {
-                  // Determine heatmap cell shade based on completion density
                   let shade = 'bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200/20';
                   if (day.completionsCount === 1) shade = 'bg-emerald-500/30';
                   else if (day.completionsCount === 2) shade = 'bg-emerald-500/60';
@@ -287,7 +295,29 @@ export default function HabitsPage() {
 
                   return (
                     <div 
-                      key={day.dateStr}
+                      key={`mobile-${day.dateStr}`}
+                      className={`w-3.5 h-3.5 rounded-[4px] transition-all hover:scale-115 hover:ring-1 hover:ring-emerald-400 cursor-help ${shade}`}
+                      title={`${day.dateStr}: ${day.completionsCount} habits checked`}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop/Tablet view: full year, scrollable on smaller tablet viewports */}
+          <div className="hidden md:flex gap-1 min-w-[760px]">
+            {weeksGrid.map((week, wIdx) => (
+              <div key={`desktop-wk-${wIdx}`} className="flex flex-col gap-1">
+                {week.map((day) => {
+                  let shade = 'bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200/20';
+                  if (day.completionsCount === 1) shade = 'bg-emerald-500/30';
+                  else if (day.completionsCount === 2) shade = 'bg-emerald-500/60';
+                  else if (day.completionsCount >= 3) shade = 'bg-emerald-500 glow-emerald';
+
+                  return (
+                    <div 
+                      key={`desktop-${day.dateStr}`}
                       className={`w-3.5 h-3.5 rounded-[4px] transition-all hover:scale-115 hover:ring-1 hover:ring-emerald-400 cursor-help ${shade}`}
                       title={`${day.dateStr}: ${day.completionsCount} habits checked`}
                     />
