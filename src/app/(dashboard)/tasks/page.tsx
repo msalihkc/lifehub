@@ -33,6 +33,8 @@ export default function TasksPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -123,13 +125,21 @@ export default function TasksPage() {
   };
 
   // Delete Task
-  const handleDeleteTask = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+  const handleDeleteTask = (id: string) => {
+    setTaskToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return;
     try {
-      await db.deleteTask(id);
+      await db.deleteTask(taskToDelete);
       loadTasksData();
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsDeleteModalOpen(false);
+      setTaskToDelete(null);
     }
   };
 
@@ -728,6 +738,44 @@ export default function TasksPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================================
+          Dialog: Delete Confirmation Modal
+          ============================================================================ */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm p-6 rounded-2xl glass-panel bg-card border border-border shadow-2xl animate-in scale-in duration-200 space-y-4">
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <Trash2 className="text-red-500" size={18} />
+              <h3 className="font-extrabold text-sm text-foreground">Delete Task</h3>
+            </div>
+            
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Are you sure you want to delete this task?
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setTaskToDelete(null);
+                }}
+                className="px-4 py-2 border border-border bg-muted/10 hover:bg-muted text-xs font-semibold rounded-xl text-muted-foreground transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteTask}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
