@@ -131,13 +131,17 @@ export default function DashboardPage() {
     return Math.round((completedCount / activeDailyHabits.length) * 100);
   };
 
-  // 3. Task rate: Percentage of today's tasks completed
+  // 3. Task rate: Percentage of today's and overdue tasks completed
   const getTaskProgress = () => {
-    const todayTasks = tasks.filter(t => t.due_date && t.due_date.startsWith(todayStr));
-    if (todayTasks.length === 0) return 100; // 100% completed if none due
+    const todayAndOverdue = tasks.filter(t => {
+      if (!t.due_date) return false;
+      const dueDatePart = t.due_date.slice(0, 10);
+      return dueDatePart <= todayStr;
+    });
+    if (todayAndOverdue.length === 0) return 100; // 100% completed if none due/overdue
     
-    const completedCount = todayTasks.filter(t => t.status === 'Done').length;
-    return Math.round((completedCount / todayTasks.length) * 100);
+    const completedCount = todayAndOverdue.filter(t => t.status === 'Done').length;
+    return Math.round((completedCount / todayAndOverdue.length) * 100);
   };
 
   // 4. Goal progress: Milestone completion rate calculation
@@ -225,7 +229,11 @@ export default function DashboardPage() {
     );
   }
 
-  const todayTasks = tasks.filter(t => t.due_date && t.due_date.startsWith(todayStr) && t.status !== 'Done');
+  const todayTasks = tasks.filter(t => {
+    if (!t.due_date) return false;
+    const dueDatePart = t.due_date.slice(0, 10);
+    return dueDatePart <= todayStr && t.status !== 'Done';
+  });
   const activeDailyHabits = habits.filter(h => h.frequency === 'daily' && !h.is_archived);
 
   return (

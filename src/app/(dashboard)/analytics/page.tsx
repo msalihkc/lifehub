@@ -22,7 +22,7 @@ import {
   Legend, 
   CartesianGrid
 } from 'recharts';
-import { db, Prayer, Habit, HabitLog, Task, Goal } from '@/lib/supabase/client';
+import { db, Prayer, Habit, HabitLog, Task, Goal, GoalMilestone } from '@/lib/supabase/client';
 import { toLocalDateString, getPastLocalDateString } from '@/lib/utils/date';
 
 export default function AnalyticsPage() {
@@ -31,6 +31,7 @@ export default function AnalyticsPage() {
   const [habitLogs, setHabitLogs] = useState<HabitLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [milestonesMap, setMilestonesMap] = useState<Record<string, GoalMilestone[]>>({});
   
   const [loading, setLoading] = useState(true);
 
@@ -52,6 +53,16 @@ export default function AnalyticsPage() {
         setHabitLogs(logs);
         setTasks(tks);
         setGoals(gls);
+
+        // Fetch milestones for all loaded goals to dynamically calculate progress
+        const msp: Record<string, GoalMilestone[]> = {};
+        await Promise.all(
+          gls.map(async (g) => {
+            const ms = await db.getGoalMilestones(g.id);
+            msp[g.id] = ms;
+          })
+        );
+        setMilestonesMap(msp);
       } catch (e) {
         console.error(e);
       } finally {
@@ -116,8 +127,14 @@ export default function AnalyticsPage() {
   // 3. Goal Progress Percentage Comparison
   const getGoalsChartData = () => {
     return goals.map(goal => {
-      // Stub progress logic based on status or milestones
-      const progress = goal.status === 'Completed' ? 100 : 50;
+      const msList = milestonesMap[goal.id] || [];
+      let progress = 0;
+      if (msList.length === 0) {
+        progress = goal.status === 'Completed' ? 100 : 0;
+      } else {
+        const doneCount = msList.filter(m => m.is_completed).length;
+        progress = Math.round((doneCount / msList.length) * 100);
+      }
       return {
         name: goal.title.length > 20 ? goal.title.slice(0, 18) + '...' : goal.title,
         Progress: progress
