@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Flame, 
   Plus, 
-  Archive, 
   Trash2, 
   Check, 
   Sparkles,
@@ -43,6 +42,10 @@ export default function HabitsPage() {
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [savingHistory, setSavingHistory] = useState(false);
+
+  // Delete dialog states
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [habitToDelete, setHabitToDelete] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -143,23 +146,21 @@ export default function HabitsPage() {
   };
 
   // Delete Habit
-  const handleDeleteHabit = async (id: string) => {
-    if (!confirm('Are you sure you want to permanently delete this habit and all its logs?')) return;
-    try {
-      await db.deleteHabit(id);
-      loadHabitsData();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDeleteHabit = (id: string) => {
+    setHabitToDelete(id);
+    setIsDeleteModalOpen(true);
   };
 
-  // Archive Habit
-  const handleArchiveHabit = async (id: string) => {
+  const confirmDeleteHabit = async () => {
+    if (!habitToDelete) return;
     try {
-      await db.updateHabit(id, { is_archived: true });
+      await db.deleteHabit(habitToDelete);
       loadHabitsData();
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsDeleteModalOpen(false);
+      setHabitToDelete(null);
     }
   };
 
@@ -455,13 +456,6 @@ export default function HabitsPage() {
                       title="Edit Habit"
                     >
                       <Edit2 size={11} />
-                    </button>
-                    <button 
-                      onClick={() => handleArchiveHabit(habit.id)}
-                      className="p-1 rounded bg-muted/60 text-muted-foreground hover:text-amber-500"
-                      title="Archive Habit"
-                    >
-                      <Archive size={11} />
                     </button>
                     <button 
                       onClick={() => handleDeleteHabit(habit.id)}
@@ -881,6 +875,44 @@ export default function HabitsPage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================================
+          Dialog: Delete Confirmation Modal
+          ============================================================================ */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm p-6 rounded-2xl glass-panel bg-card border border-border shadow-2xl animate-in scale-in duration-200 space-y-4">
+            <div className="flex items-center gap-3 border-b border-border pb-3">
+              <Trash2 className="text-red-500" size={18} />
+              <h3 className="font-extrabold text-sm text-foreground">Delete Habit</h3>
+            </div>
+            
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Are you sure you want to permanently delete this habit and all its logs?
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setHabitToDelete(null);
+                }}
+                className="px-4 py-2 border border-border bg-muted/10 hover:bg-muted text-xs font-semibold rounded-xl text-muted-foreground transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteHabit}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
