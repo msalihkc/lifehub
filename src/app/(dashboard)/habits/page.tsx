@@ -10,7 +10,10 @@ import {
   Sparkles,
   Calendar,
   X,
-  Edit2
+  Edit2,
+  History,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { db, Habit, HabitLog } from '@/lib/supabase/client';
 import { toLocalDateString, getPastLocalDateString } from '@/lib/utils/date';
@@ -32,6 +35,14 @@ export default function HabitsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+
+  // History dialog states
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyHabit, setHistoryHabit] = useState<Habit | null>(null);
+  const [tempLogs, setTempLogs] = useState<Record<string, boolean>>({});
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [savingHistory, setSavingHistory] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
@@ -159,6 +170,69 @@ export default function HabitsPage() {
     setColor(habit.color);
     setFrequency(habit.frequency);
     setIsEditOpen(true);
+  };
+
+  const handleOpenHistory = (habit: Habit) => {
+    setHistoryHabit(habit);
+    
+    // Build initial temporary logs map
+    const initialTempLogs: Record<string, boolean> = {};
+    habitLogs
+      .filter(l => l.habit_id === habit.id && l.completed)
+      .forEach(l => {
+        initialTempLogs[l.date] = true;
+      });
+    
+    setTempLogs(initialTempLogs);
+    setCalendarYear(new Date().getFullYear());
+    setCalendarMonth(new Date().getMonth());
+    setIsHistoryOpen(true);
+  };
+
+  const handleSaveHistory = async () => {
+    if (!historyHabit) return;
+    setSavingHistory(true);
+    
+    try {
+      const habitId = historyHabit.id;
+      
+      // Get all dates originally marked as complete for this habit
+      const originallyCompleted = new Set(
+        habitLogs
+          .filter(l => l.habit_id === habitId && l.completed)
+          .map(l => l.date)
+      );
+
+      // Collect all dates that we touched in tempLogs
+      const allDates = new Set([
+        ...originallyCompleted,
+        ...Object.keys(tempLogs)
+      ]);
+
+      const updates: Promise<any>[] = [];
+      
+      allDates.forEach(dateStr => {
+        const isNowCompleted = !!tempLogs[dateStr];
+        const wasCompleted = originallyCompleted.has(dateStr);
+        
+        if (isNowCompleted !== wasCompleted) {
+          updates.push(db.toggleHabitLog(habitId, dateStr, isNowCompleted));
+        }
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+      }
+
+      setIsHistoryOpen(false);
+      setHistoryHabit(null);
+      await loadHabitsData(); // Refresh all streaks and heatmap
+    } catch (err) {
+      console.error('Failed to save habit history:', err);
+      alert('An error occurred while saving habit history. Please try again.');
+    } finally {
+      setSavingHistory(false);
+    }
   };
 
   // Calculate Streaks for a given habit
@@ -369,6 +443,13 @@ export default function HabitsPage() {
                   {/* Actions buttons menu */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
+                      onClick={() => handleOpenHistory(habit)}
+                      className="p-1 rounded bg-muted/60 text-muted-foreground hover:text-pink-500 animate-in fade-in"
+                      title="Log History"
+                    >
+                      <History size={11} />
+                    </button>
+                    <button 
                       onClick={() => openEditDialog(habit)}
                       className="p-1 rounded bg-muted/60 text-muted-foreground hover:text-foreground"
                       title="Edit Habit"
@@ -399,9 +480,18 @@ export default function HabitsPage() {
 
               {/* Footer controls check in & streak */}
               <div className="flex items-center justify-between border-t border-border/80 pt-3 pl-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                  <Flame size={14} className="text-pink-500 animate-pulse" />
-                  <span>{streak} Days Streak</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <Flame size={14} className="text-pink-500 animate-pulse" />
+                    <span>{streak} Days Streak</span>
+                  </div>
+                  <button 
+                    onClick={() => handleOpenHistory(habit)}
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-pink-500 transition-colors"
+                    title="View & Edit History"
+                  >
+                    <Calendar size={13} />
+                  </button>
                 </div>
 
                 <button 
@@ -624,6 +714,173 @@ export default function HabitsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================================
+          Dialog: Habit History Calendar
+          ============================================================================ */}
+      {isHistoryOpen && historyHabit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md p-6 rounded-2xl glass-panel bg-card border border-border shadow-2xl animate-in scale-in duration-200 flex flex-col gap-4">
+            
+            {/* Header: Title */}
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                <History size={16} className="text-pink-500 animate-pulse" />
+                <span>Log History: {historyHabit.name}</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsHistoryOpen(false);
+                  setHistoryHabit(null);
+                }} 
+                className="p-1 rounded hover:bg-muted text-muted-foreground transition-all"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Subtext info */}
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Click on a date to log or remove a completion. Dates highlighted in theme colors are completed. Accidental touches are buffered; click <strong>Save Changes</strong> when done.
+            </p>
+
+            {/* Calendar Controls */}
+            <div className="flex items-center justify-between py-1 bg-muted/20 rounded-xl px-3 border border-border/40">
+              <button
+                type="button"
+                onClick={() => {
+                  if (calendarMonth === 0) {
+                    setCalendarMonth(11);
+                    setCalendarYear(prev => prev - 1);
+                  } else {
+                    setCalendarMonth(prev => prev - 1);
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              <span className="text-xs font-bold text-foreground">
+                {new Date(calendarYear, calendarMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (calendarMonth === 11) {
+                    setCalendarMonth(0);
+                    setCalendarYear(prev => prev + 1);
+                  } else {
+                    setCalendarMonth(prev => prev + 1);
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="space-y-1">
+              {/* Day names */}
+              <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted-foreground/60 uppercase">
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                  <div key={d} className="py-1">{d}</div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                {(() => {
+                  const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+                  const daysNum = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+                  const cells = [];
+
+                  // Empty spacer cells for day of week offset
+                  for (let i = 0; i < firstDay; i++) {
+                    cells.push(<div key={`empty-${i}`} className="py-2 opacity-0" />);
+                  }
+
+                  // Day cells
+                  for (let day = 1; day <= daysNum; day++) {
+                    const dayStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const isCompleted = !!tempLogs[dayStr];
+                    
+                    const cellDate = new Date(calendarYear, calendarMonth, day);
+                    const isFuture = cellDate > new Date();
+                    const isToday = toLocalDateString() === dayStr;
+
+                    cells.push(
+                      <button
+                        key={`day-${day}`}
+                        type="button"
+                        disabled={isFuture}
+                        onClick={() => {
+                          setTempLogs(prev => ({
+                            ...prev,
+                            [dayStr]: !prev[dayStr]
+                          }));
+                        }}
+                        className={`py-2 rounded-xl flex flex-col items-center justify-center relative transition-all group font-semibold ${
+                          isFuture 
+                            ? 'text-muted-foreground/20 cursor-not-allowed' 
+                            : 'cursor-pointer hover:scale-105'
+                        }`}
+                      >
+                        <span 
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                            isCompleted 
+                              ? 'text-white font-bold shadow' 
+                              : isToday 
+                              ? 'border border-pink-500/50 text-pink-500 font-bold bg-pink-500/5' 
+                              : 'hover:bg-muted text-foreground'
+                          }`}
+                          style={isCompleted ? { backgroundColor: historyHabit.color } : {}}
+                        >
+                          {day}
+                        </span>
+                      </button>
+                    );
+                  }
+
+                  return cells;
+                })()}
+              </div>
+            </div>
+
+            {/* Footer buttons */}
+            <div className="pt-3 border-t border-border flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHistoryOpen(false);
+                  setHistoryHabit(null);
+                }}
+                className="px-4 py-2 border border-border bg-muted/10 hover:bg-muted text-xs font-semibold rounded-xl text-muted-foreground transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingHistory}
+                onClick={handleSaveHistory}
+                className="px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {savingHistory ? (
+                  <>
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Changes</span>
+                )}
+              </button>
+            </div>
+
           </div>
         </div>
       )}
