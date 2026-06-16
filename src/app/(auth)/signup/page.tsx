@@ -51,8 +51,10 @@ export default function SignupPage() {
         });
         if (error) throw error;
         
-        setSuccessMsg('Registration successful! Please check your email inbox to verify your account.');
-        setLoading(false);
+        setSuccessMsg('Registration successful! Redirecting to dashboard...');
+        setTimeout(() => {
+          router.push('/');
+        }, 1200);
       } else {
         // Local Storage Sign Up
         // Customize user profile details with the inputted name
