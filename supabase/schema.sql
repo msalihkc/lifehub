@@ -16,6 +16,8 @@ create table if not exists public.profiles (
     avatar_url text,
     theme text default 'dark' check (theme in ('light', 'dark')),
     notification_prefs jsonb default '{"prayers": true, "habits": true, "tasks": true, "goals": true, "journals": false}'::jsonb,
+    task_categories text[] default ARRAY['Personal', 'Study', 'Work', 'Islamic', 'Family'],
+    goal_categories text[] default ARRAY['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family'],
     updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -167,7 +169,7 @@ create table if not exists public.tasks (
     user_id uuid references public.profiles(id) on delete cascade not null,
     title text not null,
     description text,
-    category text default 'Personal' not null check (category in ('Personal', 'Study', 'Work', 'Islamic', 'Family')),
+    category text default null,
     priority text default 'Medium' not null check (priority in ('Low', 'Medium', 'High', 'Urgent')),
     due_date timestamp with time zone,
     status text default 'Todo' not null check (status in ('Todo', 'InProgress', 'Done')),
@@ -205,7 +207,7 @@ create table if not exists public.goals (
     user_id uuid references public.profiles(id) on delete cascade not null,
     title text not null,
     description text,
-    category text default 'Deen' not null check (category in ('Deen', 'Health', 'Education', 'Career', 'Finance', 'Family')),
+    category text default null,
     target_date date,
     status text default 'InProgress' not null check (status in ('NotStarted', 'InProgress', 'Completed')),
     created_at timestamp with time zone default timezone('utc'::text, now()) not null

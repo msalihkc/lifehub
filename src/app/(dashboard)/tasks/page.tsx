@@ -39,17 +39,32 @@ export default function TasksPage() {
   // Form states
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<Task['category']>('Personal');
+  const [category, setCategory] = useState<string | null>('Personal');
   const [priority, setPriority] = useState<Task['priority']>('Medium');
   const [dueDate, setDueDate] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringPattern, setRecurringPattern] = useState<Task['recurring_pattern']>(null);
 
+  // Dynamic categories state
+  const [categories, setCategories] = useState<string[]>(['Personal', 'Study', 'Work', 'Islamic', 'Family']);
+
   const todayStr = toLocalDateString();
 
   useEffect(() => {
     loadTasksData();
+    loadProfileCategories();
   }, []);
+
+  const loadProfileCategories = async () => {
+    try {
+      const data = await db.getProfile();
+      if (data.task_categories && data.task_categories.length > 0) {
+        setCategories(data.task_categories);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const loadTasksData = async () => {
     try {
@@ -158,7 +173,7 @@ export default function TasksPage() {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setCategory('Personal');
+    setCategory(categories[0] || null);
     setPriority('Medium');
     setDueDate('');
     setIsRecurring(false);
@@ -192,7 +207,12 @@ export default function TasksPage() {
   // Filter & Sorting Logic
   // -------------------------------------------------------------
   const filteredTasks = tasks.filter(t => {
-    const catMatch = filterCategory === 'All' || t.category === filterCategory;
+    const catMatch = 
+      filterCategory === 'All' 
+        ? true 
+        : filterCategory === 'Uncategorized' 
+          ? (!t.category || t.category === '') 
+          : t.category === filterCategory;
     const priMatch = filterPriority === 'All' || t.priority === filterPriority;
     return catMatch && priMatch;
   });
@@ -201,7 +221,6 @@ export default function TasksPage() {
   const inProgressTasks = filteredTasks.filter(t => t.status === 'InProgress');
   const completedTasks = filteredTasks.filter(t => t.status === 'Done');
 
-  const categories = ['Personal', 'Study', 'Work', 'Islamic', 'Family'];
   const priorities = ['Low', 'Medium', 'High', 'Urgent'];
 
   if (loading && tasks.length === 0) {
@@ -285,6 +304,7 @@ export default function TasksPage() {
             >
               <option value="All">All Categories</option>
               {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="Uncategorized">Uncategorized</option>
             </select>
           </div>
 
@@ -424,9 +444,13 @@ export default function TasksPage() {
                           </p>
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="px-2 py-0.5 rounded-full bg-muted border border-border text-[9px] font-bold uppercase tracking-wider">
-                            {t.category}
-                          </span>
+                          {t.category ? (
+                            <span className="px-2 py-0.5 rounded-full bg-muted border border-border text-[9px] font-bold uppercase tracking-wider">
+                              {t.category}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/40">—</span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4">
                           <span className={`text-[9px] font-bold uppercase tracking-wider ${
@@ -518,12 +542,16 @@ export default function TasksPage() {
                     Category
                   </label>
                   <select
-                    value={category}
-                    onChange={(e: any) => setCategory(e.target.value)}
+                    value={category || ''}
+                    onChange={(e: any) => setCategory(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-xl border border-border bg-muted/10 text-xs focus:outline-none text-foreground"
                   >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="">Uncategorized</option>
                   </select>
+                  <span className="text-[10px] text-muted-foreground/70 mt-1 block">
+                    Tip: You can manage and create custom categories in the Profile settings tab.
+                  </span>
                 </div>
 
                 <div>
@@ -654,12 +682,16 @@ export default function TasksPage() {
                     Category
                   </label>
                   <select
-                    value={category}
-                    onChange={(e: any) => setCategory(e.target.value)}
+                    value={category || ''}
+                    onChange={(e: any) => setCategory(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-xl border border-border bg-muted/10 text-xs focus:outline-none text-foreground"
                   >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="">Uncategorized</option>
                   </select>
+                  <span className="text-[10px] text-muted-foreground/70 mt-1 block">
+                    Tip: You can manage and create custom categories in the Profile settings tab.
+                  </span>
                 </div>
 
                 <div>
@@ -848,9 +880,11 @@ function TaskCard({ task, onDragStart, onEdit, onDelete, onCheck }: TaskCardProp
         )}
 
         <div className="flex items-center gap-1.5">
-          <span className="px-1.5 py-0.2 rounded bg-muted border border-border/60 text-[8px] font-bold uppercase tracking-wider">
-            {task.category}
-          </span>
+          {task.category && (
+            <span className="px-1.5 py-0.2 rounded bg-muted border border-border/60 text-[8px] font-bold uppercase tracking-wider">
+              {task.category}
+            </span>
+          )}
           <span className={`text-[8px] font-bold uppercase tracking-wider ${
             task.priority === 'Urgent' ? 'text-red-500' :
             task.priority === 'High' ? 'text-orange-500' :

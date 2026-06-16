@@ -26,6 +26,8 @@ export interface Profile {
     goals: boolean;
     journals: boolean;
   };
+  task_categories?: string[];
+  goal_categories?: string[];
   updated_at: string;
 }
 
@@ -88,7 +90,7 @@ export interface Task {
   user_id: string;
   title: string;
   description: string;
-  category: 'Personal' | 'Study' | 'Work' | 'Islamic' | 'Family';
+  category: string | null;
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   due_date: string | null;
   status: 'Todo' | 'InProgress' | 'Done';
@@ -102,7 +104,7 @@ export interface Goal {
   user_id: string;
   title: string;
   description: string;
-  category: 'Deen' | 'Health' | 'Education' | 'Career' | 'Finance' | 'Family';
+  category: string | null;
   target_date: string;
   status: 'NotStarted' | 'InProgress' | 'Completed';
   created_at: string;
@@ -162,6 +164,8 @@ const getInitialSeedData = () => {
       goals: true,
       journals: false
     },
+    task_categories: ['Personal', 'Study', 'Work', 'Islamic', 'Family'],
+    goal_categories: ['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family'],
     updated_at: new Date().toISOString()
   };
 
@@ -1252,6 +1256,58 @@ export const db = {
       notis.push(newNoti);
       setLocal('lifehub_notifications', notis);
       return newNoti;
+    }
+  },
+
+  async nullifyTaskCategory(categoryName: string): Promise<void> {
+    if (isCloudMode && supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Unauthenticated');
+      const { error } = await supabase
+        .from('tasks')
+        .update({ category: null })
+        .eq('user_id', user.id)
+        .eq('category', categoryName);
+      if (error) throw error;
+    } else {
+      const tasks = getLocal<Task>('lifehub_tasks');
+      let updated = false;
+      const newTasks = tasks.map(task => {
+        if (task.category === categoryName) {
+          updated = true;
+          return { ...task, category: null };
+        }
+        return task;
+      });
+      if (updated) {
+        setLocal('lifehub_tasks', newTasks);
+      }
+    }
+  },
+
+  async nullifyGoalCategory(categoryName: string): Promise<void> {
+    if (isCloudMode && supabase) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Unauthenticated');
+      const { error } = await supabase
+        .from('goals')
+        .update({ category: null })
+        .eq('user_id', user.id)
+        .eq('category', categoryName);
+      if (error) throw error;
+    } else {
+      const goals = getLocal<Goal>('lifehub_goals');
+      let updated = false;
+      const newGoals = goals.map(goal => {
+        if (goal.category === categoryName) {
+          updated = true;
+          return { ...goal, category: null };
+        }
+        return goal;
+      });
+      if (updated) {
+        setLocal('lifehub_goals', newGoals);
+      }
     }
   },
 

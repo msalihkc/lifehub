@@ -31,16 +31,31 @@ export default function GoalsPage() {
   // Form states
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<Goal['category']>('Deen');
+  const [category, setCategory] = useState<string | null>('Deen');
   const [targetDate, setTargetDate] = useState('');
   const [goalStatus, setGoalStatus] = useState<Goal['status']>('InProgress');
   
   // New Milestone input state
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
 
+  // Dynamic categories state
+  const [categories, setCategories] = useState<string[]>(['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family']);
+
   useEffect(() => {
     loadGoalsData();
+    loadProfileCategories();
   }, []);
+
+  const loadProfileCategories = async () => {
+    try {
+      const data = await db.getProfile();
+      if (data.goal_categories && data.goal_categories.length > 0) {
+        setCategories(data.goal_categories);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const loadGoalsData = async () => {
     try {
@@ -196,7 +211,7 @@ export default function GoalsPage() {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setCategory('Deen');
+    setCategory(categories[0] || null);
     setTargetDate('');
     setGoalStatus('InProgress');
   };
@@ -210,8 +225,6 @@ export default function GoalsPage() {
     const doneCount = msList.filter(m => m.is_completed).length;
     return Math.round((doneCount / msList.length) * 100);
   };
-
-  const categories = ['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family'];
 
   if (loading && goals.length === 0) {
     return (
@@ -287,9 +300,11 @@ export default function GoalsPage() {
                       </div>
                       <div>
                         <h4 className="font-extrabold text-sm text-foreground leading-none">{goal.title}</h4>
-                        <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground mt-1.5 block">
-                          {goal.category}
-                        </span>
+                        {goal.category && (
+                          <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground mt-1.5 block">
+                            {goal.category}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
@@ -490,12 +505,16 @@ export default function GoalsPage() {
                     Category
                   </label>
                   <select
-                    value={category}
-                    onChange={(e: any) => setCategory(e.target.value)}
+                    value={category || ''}
+                    onChange={(e: any) => setCategory(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-xl border border-border bg-muted/10 text-xs focus:outline-none text-foreground"
                   >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="">Uncategorized</option>
                   </select>
+                  <span className="text-[10px] text-muted-foreground/70 mt-1 block">
+                    Tip: You can manage and create custom categories in the Profile settings tab.
+                  </span>
                 </div>
 
                 <div>
@@ -580,12 +599,16 @@ export default function GoalsPage() {
                     Category
                   </label>
                   <select
-                    value={category}
-                    onChange={(e: any) => setCategory(e.target.value)}
+                    value={category || ''}
+                    onChange={(e: any) => setCategory(e.target.value || null)}
                     className="w-full px-3 py-2 rounded-xl border border-border bg-muted/10 text-xs focus:outline-none text-foreground"
                   >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="">Uncategorized</option>
                   </select>
+                  <span className="text-[10px] text-muted-foreground/70 mt-1 block">
+                    Tip: You can manage and create custom categories in the Profile settings tab.
+                  </span>
                 </div>
 
                 <div className="col-span-1">

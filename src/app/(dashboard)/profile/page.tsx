@@ -12,7 +12,8 @@ import {
   CheckCircle, 
   AlertCircle,
   FileSpreadsheet,
-  Lock
+  Lock,
+  Tag
 } from 'lucide-react';
 import { db, Profile, isCloudMode, supabase } from '@/lib/supabase/client';
 import { toLocalDateString } from '@/lib/utils/date';
@@ -37,6 +38,14 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [securityMessage, setSecurityMessage] = useState({ text: '', type: '' });
+
+  // Custom task and goal categories states
+  const [taskCategories, setTaskCategories] = useState<string[]>([]);
+  const [goalCategories, setGoalCategories] = useState<string[]>([]);
+  const [newTaskCategory, setNewTaskCategory] = useState('');
+  const [newGoalCategory, setNewGoalCategory] = useState('');
+  const [savingCategories, setSavingCategories] = useState(false);
+  const [categoriesMessage, setCategoriesMessage] = useState({ text: '', type: '' });
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +93,8 @@ export default function ProfilePage() {
         setNotiTasks(data.notification_prefs.tasks);
         setNotiGoals(data.notification_prefs.goals);
         setNotiJournals(data.notification_prefs.journals);
+        setTaskCategories(data.task_categories || ['Personal', 'Study', 'Work', 'Islamic', 'Family']);
+        setGoalCategories(data.goal_categories || ['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family']);
       } catch (err) {
         console.error(err);
       } finally {
@@ -115,6 +126,44 @@ export default function ProfilePage() {
       setMessage({ text: err.message || 'Failed to save changes.', type: 'error' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveCategories = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCategories(true);
+    setCategoriesMessage({ text: '', type: '' });
+
+    try {
+      const currentProfile = await db.getProfile();
+      const oldTaskCats = currentProfile.task_categories || ['Personal', 'Study', 'Work', 'Islamic', 'Family'];
+      const oldGoalCats = currentProfile.goal_categories || ['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family'];
+
+      // Diffs
+      const deletedTaskCats = oldTaskCats.filter(cat => !taskCategories.includes(cat));
+      const deletedGoalCats = oldGoalCats.filter(cat => !goalCategories.includes(cat));
+
+      // Nullify disassociated categories
+      for (const cat of deletedTaskCats) {
+        await db.nullifyTaskCategory(cat);
+      }
+      for (const cat of deletedGoalCats) {
+        await db.nullifyGoalCategory(cat);
+      }
+
+      const updated = await db.updateProfile({
+        task_categories: taskCategories,
+        goal_categories: goalCategories
+      });
+
+      setProfile(updated);
+      setTaskCategories(updated.task_categories || ['Personal', 'Study', 'Work', 'Islamic', 'Family']);
+      setGoalCategories(updated.goal_categories || ['Deen', 'Health', 'Education', 'Career', 'Finance', 'Family']);
+      setCategoriesMessage({ text: 'Categories saved successfully! Deleted categories disassociated.', type: 'success' });
+    } catch (err: any) {
+      setCategoriesMessage({ text: err.message || 'Failed to save categories.', type: 'error' });
+    } finally {
+      setSavingCategories(false);
     }
   };
 
@@ -326,6 +375,159 @@ export default function ProfilePage() {
               >
                 <Save size={14} />
                 <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Category Management */}
+          <form onSubmit={handleSaveCategories} className="p-6 rounded-2xl glass-panel bg-card border border-border space-y-5">
+            <h3 className="font-bold text-sm text-foreground flex items-center gap-2 pb-2 border-b border-border">
+              <Tag size={16} className="text-indigo-500" />
+              <span>Category Management</span>
+            </h3>
+
+            {categoriesMessage.text && (
+              <div className={`p-3 rounded-xl border text-xs flex gap-2.5 items-center ${
+                categoriesMessage.type === 'success' 
+                  ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500' 
+                  : 'border-red-500/20 bg-red-500/5 text-red-500'
+              }`}>
+                {categoriesMessage.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                <span>{categoriesMessage.text}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Task Categories */}
+              <div className="space-y-3">
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-0.5">
+                  Task Categories
+                </label>
+                <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 rounded-xl border border-border bg-muted/5">
+                  {taskCategories.length === 0 ? (
+                    <span className="text-[11px] text-muted-foreground italic pl-1 self-center">No categories. Add one below.</span>
+                  ) : (
+                    taskCategories.map(cat => (
+                      <div key={cat} className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-zinc-800 border border-zinc-700/80 text-[11px] text-foreground">
+                        <span>{cat}</span>
+                        <button
+                          type="button"
+                          onClick={() => setTaskCategories(taskCategories.filter(c => c !== cat))}
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-zinc-700/50 transition-all text-xs"
+                          title={`Delete ${cat}`}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="New task category..."
+                    value={newTaskCategory}
+                    onChange={(e) => setNewTaskCategory(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const trimmed = newTaskCategory.trim();
+                        if (trimmed && !taskCategories.includes(trimmed)) {
+                          setTaskCategories([...taskCategories, trimmed]);
+                          setNewTaskCategory('');
+                        }
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-border bg-muted/10 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newTaskCategory.trim();
+                      if (trimmed && !taskCategories.includes(trimmed)) {
+                        setTaskCategories([...taskCategories, trimmed]);
+                        setNewTaskCategory('');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-foreground font-bold text-xs rounded-xl border border-zinc-700 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Goal Categories */}
+              <div className="space-y-3">
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pl-0.5">
+                  Goal Categories
+                </label>
+                <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 rounded-xl border border-border bg-muted/5">
+                  {goalCategories.length === 0 ? (
+                    <span className="text-[11px] text-muted-foreground italic pl-1 self-center">No categories. Add one below.</span>
+                  ) : (
+                    goalCategories.map(cat => (
+                      <div key={cat} className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-zinc-800 border border-zinc-700/80 text-[11px] text-foreground">
+                        <span>{cat}</span>
+                        <button
+                          type="button"
+                          onClick={() => setGoalCategories(goalCategories.filter(c => c !== cat))}
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-zinc-700/50 transition-all text-xs"
+                          title={`Delete ${cat}`}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="New goal category..."
+                    value={newGoalCategory}
+                    onChange={(e) => setNewGoalCategory(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const trimmed = newGoalCategory.trim();
+                        if (trimmed && !goalCategories.includes(trimmed)) {
+                          setGoalCategories([...goalCategories, trimmed]);
+                          setNewGoalCategory('');
+                        }
+                      }
+                    }}
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-border bg-muted/10 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newGoalCategory.trim();
+                      if (trimmed && !goalCategories.includes(trimmed)) {
+                        setGoalCategories([...goalCategories, trimmed]);
+                        setNewGoalCategory('');
+                      }
+                    }}
+                    className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-foreground font-bold text-xs rounded-xl border border-zinc-700 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 text-yellow-500/90 text-[11px] leading-relaxed">
+              <span className="font-semibold block mb-0.5">⚠️ Warning on deleting categories:</span>
+              If you delete a category, any existing tasks or goals assigned to it will remain intact but will be marked as uncategorized (blank).
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={savingCategories}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-bold text-xs rounded-xl shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <Save size={14} />
+                <span>{savingCategories ? 'Saving Categories...' : 'Save Categories'}</span>
               </button>
             </div>
           </form>
